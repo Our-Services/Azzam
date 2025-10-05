@@ -2,7 +2,7 @@
   publish = "/" 
   functions = "netlify/functions"
 
-# This cron job runs the function every 5 minutes
-[[functions."send-notifications".schedule]]
-  cron = "*/5 * * * *"
+# Correct syntax for a scheduled function
+[functions."send-notifications"]
+  schedule = "*/5 * * * *"
 
