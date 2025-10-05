@@ -208,6 +208,27 @@
             }
         }
 
+        // NEW: Test Notification Function
+        function sendTestNotification() {
+            if (Notification.permission !== 'granted') {
+                const warningEl = document.getElementById('permission-warning');
+                warningEl.classList.remove('hidden');
+                console.error("Cannot send test notification: Permission not granted. Please click 'Request Notification Permission' and allow it.");
+                // Animate the warning to make it more visible
+                warningEl.style.transform = 'scale(1.05)';
+                setTimeout(() => { warningEl.style.transform = 'scale(1)'; }, 200);
+                return;
+            }
+            try {
+                new Notification('Test Notification ✅', {
+                    body: 'If you see this, notifications are working correctly!',
+                    icon: 'https://placehold.co/64x64/22c55e/ffffff?text=OK',
+                });
+            } catch (e) {
+                console.error("Failed to send test notification:", e);
+            }
+        }
+
         function checkAndScheduleNotifications(data) {
             const now = new Date();
             const settings = loadSettings();
@@ -237,17 +258,17 @@
                     const notificationId = `${cls.code}-${cls.day}-${cls.start}-${alertMinutes}min`;
                     
                     if (fireTimeMs <= nowMs && fireTimeMs > (nowMs - 60000) && !firedNotifications[notificationId]) {
-                        const title = `Reminder: ${alertMinutes} minutes until class!`;
-                        const body = `${cls.subject} (${cls.type}) starts at ${to12Hour(cls.start)} in room ${cls.room}. Get ready!`;
-                        
-                        new Notification(title, {
-                            body: body,
-                            icon: 'https://placehold.co/64x64/4f46e5/ffffff?text=C', 
-                            tag: notificationId 
-                        });
-                        
-                        firedNotifications[notificationId] = true;
-                        localStorage.setItem('firedNotifications', JSON.stringify(firedNotifications));
+                         try {
+                            new Notification(`Reminder: ${alertMinutes} mins until class!`, {
+                                body: `${cls.subject} (${cls.type}) starts at ${to12Hour(cls.start)} in ${cls.room}.`,
+                                icon: 'https://placehold.co/64x64/4f46e5/ffffff?text=C', 
+                                tag: notificationId 
+                            });
+                            firedNotifications[notificationId] = true;
+                            localStorage.setItem('firedNotifications', JSON.stringify(firedNotifications));
+                        } catch (e) {
+                            console.error(`Failed to create notification for ${cls.subject}:`, e);
+                        }
                     }
                 });
             });
@@ -321,6 +342,7 @@
                 
                 document.querySelectorAll('.notification-setting-input').forEach(el => el.addEventListener('change', updateSettingsFromUI));
                 document.getElementById('request-permission-btn').addEventListener('click', requestNotificationPermission);
+                document.getElementById('send-test-notification-btn').addEventListener('click', sendTestNotification); // Add listener for test button
             }
 
             renderScheduleView(scheduleData, scheduleContainer);
@@ -361,9 +383,15 @@
 
             <div class="flex flex-col md:flex-row justify-between items-center bg-indigo-50 p-4 rounded-lg border border-indigo-200 mb-6">
                 <div class="mb-3 md:mb-0 text-center md:text-left">
-                    <button id="request-permission-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-full transition duration-200 shadow-md">
-                        Request Notification Permission
-                    </button>
+                    <div class="flex items-center space-x-2">
+                        <button id="request-permission-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-full transition duration-200 shadow-md">
+                            Request Notification Permission
+                        </button>
+                        <!-- NEW TEST BUTTON -->
+                        <button id="send-test-notification-btn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-full transition duration-200 shadow-md">
+                            Send Test Notification
+                        </button>
+                    </div>
                     <p id="permission-status" class="text-xs text-gray-700 mt-2 font-medium">Default Permission</p>
                 </div>
                 <div class="flex items-center space-x-3 toggle-switch-group">
