@@ -74,7 +74,7 @@
                 const permission = await Notification.requestPermission();
                 if (permission === 'granted') {
                     showMessage('Notification permission granted.', 'success');
-                    const vapidKey = "YOUR_VAPID_KEY_FROM_FIREBASE_SETTINGS"; // IMPORTANT: Add your VAPID key here
+                    const vapidKey = "BDYWhY5UZEUZGA4PzhFEUO_fmIFEP4BnoeDBv0EVAvFh719Wb522tcvbz3RtTTeqjha_l-oQYJF43J-zvUGTZNE"; // VAPID Key has been added
                     const currentToken = await getToken(messaging, { vapidKey: vapidKey });
                     if (currentToken) {
                         console.log('FCM Token:', currentToken);
