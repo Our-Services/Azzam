@@ -141,42 +141,68 @@
             }
         }
         
+        function showMessage(message, type = 'info') {
+            const messageEl = document.getElementById('notification-message');
+            messageEl.textContent = message;
+            
+            messageEl.classList.remove('hidden', 'bg-green-100', 'text-green-800', 'border-green-500', 'bg-red-100', 'text-red-800', 'border-red-500');
+
+            if (type === 'success') {
+                messageEl.classList.add('bg-green-100', 'text-green-800', 'border-green-500');
+            } else if (type === 'error') {
+                messageEl.classList.add('bg-red-100', 'text-red-800', 'border-red-500');
+            }
+
+            setTimeout(() => {
+                messageEl.classList.add('hidden');
+            }, 5000);
+        }
+
         function updatePermissionStatusUI() {
             const permission = Notification.permission;
             const statusEl = document.getElementById('permission-status');
-            const settings = loadSettings();
-
             let statusText = "Default Permission";
             if (permission === 'granted') statusText = "Permission Granted";
             if (permission === 'denied') statusText = "Permission Denied";
             statusEl.textContent = statusText;
-
-            const warningEl = document.getElementById('permission-warning');
-            if (settings.enabled && permission !== 'granted') {
-                warningEl.classList.remove('hidden');
-            } else {
-                warningEl.classList.add('hidden');
-            }
         }
 
-        function requestNotificationPermission() {
+        function requestNotificationPermission(onGranted) {
             if (!("Notification" in window)) {
-                document.getElementById('permission-status').textContent = "Notifications not supported.";
+                showMessage("This browser does not support desktop notifications.", "error");
                 return;
             }
 
-            if (Notification.permission !== 'granted') {
-                Notification.requestPermission().then(permission => {
-                    updatePermissionStatusUI(); 
-                    if (permission !== 'granted') {
-                        document.getElementById('notification-master-toggle').checked = false;
-                        updateSettingsFromUI(); 
-                    }
-                }).catch(e => {
-                    console.error("Error requesting notification permission:", e);
-                });
-            } else {
+            Notification.requestPermission().then(permission => {
                 updatePermissionStatusUI();
+                if (permission === 'granted') {
+                    if (onGranted) onGranted();
+                } else {
+                    showMessage("Permission was not granted. Notifications will not be sent.", "error");
+                }
+            }).catch(e => {
+                console.error("Error requesting notification permission:", e);
+            });
+        }
+        
+        function sendTestNotification() {
+            const permission = Notification.permission;
+            if (permission === 'granted') {
+                try {
+                    new Notification('Test Notification ✅', {
+                        body: 'If you see this, notifications are working correctly!',
+                        icon: 'https://placehold.co/64x64/22c55e/ffffff?text=OK',
+                    });
+                    showMessage("Test notification sent successfully!", "success");
+                } catch (e) {
+                    console.error("Failed to send test notification:", e);
+                    showMessage("Failed to send test notification. See console for details.", "error");
+                }
+            } else if (permission === 'denied') {
+                showMessage("Notifications are blocked. Please enable them in your browser's site settings.", "error");
+            } else {
+                // If permission is default, request it, and if granted, send the test notification.
+                requestNotificationPermission(sendTestNotification);
             }
         }
 
@@ -184,7 +210,7 @@
             const newAlerts = [];
             const inputGroups = document.querySelectorAll('[data-alert-group]');
             
-            inputGroups.forEach((group, index) => {
+            inputGroups.forEach((group) => {
                 const durationInput = group.querySelector('[data-alert-input]');
                 const toggleInput = group.querySelector('[data-alert-toggle]');
                 const duration = parseInt(durationInput.value, 10) || 0;
@@ -196,37 +222,11 @@
             const newSettings = { enabled: enabled, alerts: newAlerts };
             saveSettings(newSettings);
             
-            if (enabled && Notification.permission === 'default') {
-                requestNotificationPermission();
-            }
-            
-            updatePermissionStatusUI();
-
             if (!enabled) {
                 localStorage.removeItem('firedNotifications');
                 firedNotifications = {};
             }
-        }
-
-        // NEW: Test Notification Function
-        function sendTestNotification() {
-            if (Notification.permission !== 'granted') {
-                const warningEl = document.getElementById('permission-warning');
-                warningEl.classList.remove('hidden');
-                console.error("Cannot send test notification: Permission not granted. Please click 'Request Notification Permission' and allow it.");
-                // Animate the warning to make it more visible
-                warningEl.style.transform = 'scale(1.05)';
-                setTimeout(() => { warningEl.style.transform = 'scale(1)'; }, 200);
-                return;
-            }
-            try {
-                new Notification('Test Notification ✅', {
-                    body: 'If you see this, notifications are working correctly!',
-                    icon: 'https://placehold.co/64x64/22c55e/ffffff?text=OK',
-                });
-            } catch (e) {
-                console.error("Failed to send test notification:", e);
-            }
+            updatePermissionStatusUI();
         }
 
         function checkAndScheduleNotifications(data) {
@@ -341,8 +341,7 @@
                 updatePermissionStatusUI();
                 
                 document.querySelectorAll('.notification-setting-input').forEach(el => el.addEventListener('change', updateSettingsFromUI));
-                document.getElementById('request-permission-btn').addEventListener('click', requestNotificationPermission);
-                document.getElementById('send-test-notification-btn').addEventListener('click', sendTestNotification); // Add listener for test button
+                document.getElementById('send-test-notification-btn').addEventListener('click', sendTestNotification);
             }
 
             renderScheduleView(scheduleData, scheduleContainer);
@@ -375,21 +374,13 @@
         <div class="bg-white rounded-xl shadow-lg p-6 md:p-8 mt-12">
             <h2 class="text-2xl font-bold text-indigo-700 mb-4 border-b pb-3">Notification Settings</h2>
             
-            <!-- NEW: Permission Warning -->
-            <div id="permission-warning" class="hidden bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-4 mb-4 rounded-md" role="alert">
-              <p class="font-bold">Action Required</p>
-              <p>Notifications are on, but your browser requires permission. Please click the "Request... Permission" button and choose "Allow".</p>
-            </div>
+            <div id="notification-message" class="hidden border-l-4 p-4 mb-4 rounded-md" role="alert"></div>
 
             <div class="flex flex-col md:flex-row justify-between items-center bg-indigo-50 p-4 rounded-lg border border-indigo-200 mb-6">
                 <div class="mb-3 md:mb-0 text-center md:text-left">
                     <div class="flex items-center space-x-2">
-                        <button id="request-permission-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-full transition duration-200 shadow-md">
-                            Request Notification Permission
-                        </button>
-                        <!-- NEW TEST BUTTON -->
                         <button id="send-test-notification-btn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-full transition duration-200 shadow-md">
-                            Send Test Notification
+                            Test Notifications
                         </button>
                     </div>
                     <p id="permission-status" class="text-xs text-gray-700 mt-2 font-medium">Default Permission</p>
@@ -440,7 +431,7 @@
                     <input type="number" id="alert-duration-3" data-alert-input="2" class="notification-setting-input mt-1 block w-full px-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md shadow-sm">
                 </div>
             </div>
-            <p class="text-xs text-gray-500 mt-4">Note: To receive alerts, you must first click "Request Notification Permission" and allow it in your browser.</p>
+            <p class="text-xs text-gray-500 mt-4">Note: Click "Test Notifications" to grant permission and confirm that alerts are working.</p>
         </div>
     </div>
 </body>
