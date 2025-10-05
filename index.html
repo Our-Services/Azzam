@@ -42,6 +42,17 @@
 <body class="p-4 md:p-8">
 
      <script type="module">
+         // تسجيل Service Worker
+         if ('serviceWorker' in navigator) {
+             navigator.serviceWorker.register('/firebase-messaging-sw.js')
+                 .then(registration => {
+                     console.log('Service Worker registered:', registration);
+                 })
+                 .catch(error => {
+                     console.error('Service Worker registration failed:', error);
+                 });
+         }
+
          // Firebase configuration
          const firebaseConfig = {
              apiKey: "AIzaSyBMpLj1TKI4HJZeUEJ5iXekNZFv91lB1Cc",
