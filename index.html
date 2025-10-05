@@ -51,9 +51,9 @@
           appId: "1:916342975413:web:0cd396d037eabef93b07fc",
           measurementId: "G-L38V241YFY"
         };
-        const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
-        const { getMessaging, getToken, onMessage } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js');
-        const { getFirestore, doc, setDoc } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+        const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+        const { getMessaging, getToken, onMessage } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js");
+        const { getFirestore, doc, setDoc } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
         const app = initializeApp(firebaseConfig);
         const messaging = getMessaging(app);
         const db = getFirestore(app);
@@ -70,7 +70,7 @@
         
         function getAlertsFromUI() {
             const alerts = [];
-            document.querySelectorAll('[data-alert-group]').forEach(group => {
+            document.querySelectorAll('[data-alert-group]').forEach((group, index) => {
                 const minutes = group.querySelector('input[type="number"]').value;
                 const enabled = group.querySelector('input[type="checkbox"]').checked;
                 alerts.push({
