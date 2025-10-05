@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Academic Schedule</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap');
+        body {
+            font-family: 'Cairo', sans-serif;
+            background-color: #f8fafc; /* Lighter background color */
+        }
+
+        /* Color schemes for subjects */
+        .color-1 { --class-color: #3b82f6; } /* Blue */
+        .color-2 { --class-color: #22c55e; } /* Green */
+        .color-3 { --class-color: #eab308; } /* Yellow */
+        .color-4 { --class-color: #8b5cf6; } /* Purple */
+
+        .class-card {
+            border-left-width: 4px; /* Changed from border-right for LTR */
+            border-color: var(--class-color);
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .class-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.07), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        .status-countdown {
+            font-size: 2.25rem;
+            font-weight: 800;
+            direction: ltr; 
+        }
+        
+        .toggle-switch-group .peer:checked ~ div {
+            transform: translateX(100%);
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <!-- Schedule Data (JSON) - Now in English -->
+    <script>
+        const scheduleData = [
+            // Monday
+            { day: 'Monday', subject: 'Effective Writing', type: 'Tutorial', code: 'BLE3022', start: '08:00', end: '10:00', lecturer: 'Melissa Wong Ling Lee', room: 'C204', color: 1 },
+            { day: 'Monday', subject: 'Fundamentals of Marketing', type: 'Tutorial', code: 'BBM1013', start: '11:00', end: '12:00', lecturer: 'Nazliwati Mohamad', room: 'C207', color: 2 },
+            // Tuesday
+            { day: 'Tuesday', subject: 'Business Accounting', type: 'Tutorial', code: 'BBA1093', start: '12:00', end: '13:00', lecturer: 'Asst. Prof. Dr. Mohamad Aznillah', room: 'C411', color: 3 },
+            { day: 'Tuesday', subject: 'Logistics and Supply Chain Management', type: 'Tutorial', code: 'BBL1013', start: '17:00', end: '18:00', lecturer: 'Ong Eu Chin', room: 'C401', color: 4 },
+            { day: 'Tuesday', subject: 'Fundamentals of Marketing', type: 'Lecture', code: 'BBM1013', start: '18:00', end: '20:00', lecturer: 'Nazliwati Mohamad', room: 'C302', color: 2 },
+            // Wednesday
+            { day: 'Wednesday', subject: 'Logistics and Supply Chain Management', type: 'Lecture', code: 'BBL1013', start: '17:00', end: '19:00', lecturer: 'Ong Eu Chin', room: 'C407', color: 4 },
+            // Thursday
+            { day: 'Thursday', subject: 'Business Accounting', type: 'Lecture', code: 'BBA1093', start: '13:00', end: '15:00', lecturer: 'Asst. Prof. Dr. Mohamad Aznillah', room: 'GG07', color: 3 },
+        ];
+
+        const daysOrder = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const dayNamesEn = {
+            'Sunday': 'Sunday', 'Monday': 'Monday', 'Tuesday': 'Tuesday', 'Wednesday': 'Wednesday', 
+            'Thursday': 'Thursday', 'Friday': 'Friday', 'Saturday': 'Saturday'
+        };
+        
+        // --- Helper Functions ---
+        function to12Hour(time24) {
+            const [hours24, minutes] = time24.split(':');
+            let hours = parseInt(hours24, 10);
+            const period = hours >= 12 ? ' PM' : ' AM'; 
+            hours = hours % 12;
+            hours = hours ? hours : 12; 
+            return `${hours}:${minutes}${period}`;
+        }
+        
+        function groupClassesByDay(classes) {
+            const grouped = {};
+            daysOrder.forEach(day => grouped[day] = []);
+            classes.forEach(cls => {
+                if (grouped[cls.day]) {
+                    grouped[cls.day].push(cls);
+                }
+            });
+            for (const day in grouped) {
+                grouped[day].sort((a, b) => a.start.localeCompare(b.start));
+            }
+            return grouped;
+        }
+
+        function getAbsoluteTime(classObj, isStart) {
+            const now = new Date();
+            const time24 = isStart ? classObj.start : classObj.end;
+            const [hours, minutes] = time24.split(':').map(Number);
+            
+            const targetDayIndex = daysOrder.indexOf(classObj.day); 
+            const currentDayIndex = now.getDay(); 
+            
+            const targetDate = new Date(now);
+            let daysDiff = targetDayIndex - currentDayIndex;
+            
+            if (daysDiff < 0) { daysDiff += 7; }
+            
+            targetDate.setDate(now.getDate() + daysDiff);
+            targetDate.setHours(hours, minutes, 0, 0);
+            
+            if (daysDiff === 0 && targetDate.getTime() < now.getTime()) {
+                 targetDate.setDate(targetDate.getDate() + 7);
+            }
+            
+            return targetDate;
+        }
+
+        // --- Notification Logic ---
+        let firedNotifications = {};
+
+        function loadSettings() {
+            try {
+                const settingsJson = localStorage.getItem('notificationSettings');
+                if (settingsJson) {
+                    return JSON.parse(settingsJson);
+                }
+            } catch (e) {
+                console.error("Error loading notification settings:", e);
+            }
+            // Default settings
+            return {
+                enabled: false,
+                alerts: [
+                    { duration: 10, isActive: true },
+                    { duration: 30, isActive: false },
+                    { duration: 60, isActive: false }
+                ] 
+            };
+        }
+
+        function saveSettings(settings) {
+            try {
+                localStorage.setItem('notificationSettings', JSON.stringify(settings));
+            } catch (e) {
+                console.error("Error saving notification settings:", e);
+            }
+        }
+
+        function requestNotificationPermission() {
+            if (!("Notification" in window)) {
+                document.getElementById('permission-status').textContent = "Notifications not supported.";
+                return;
+            }
+
+            if (Notification.permission !== 'granted') {
+                Notification.requestPermission().then(permission => {
+                    document.getElementById('permission-status').textContent = 
+                        permission === 'granted' ? "Permission Granted" : "Permission Denied";
+                    if (permission !== 'granted') {
+                        document.getElementById('notification-master-toggle').checked = false;
+                        updateSettingsFromUI(); 
+                    }
+                }).catch(e => {
+                    console.error("Error requesting notification permission:", e);
+                });
+            } else {
+                document.getElementById('permission-status').textContent = "Permission Granted";
+            }
+        }
+
+        function updateSettingsFromUI() {
+            const newAlerts = [];
+            const inputGroups = document.querySelectorAll('[data-alert-group]');
+            
+            inputGroups.forEach((group, index) => {
+                const durationInput = group.querySelector('[data-alert-input]');
+                const toggleInput = group.querySelector('[data-alert-toggle]');
+                
+                const duration = parseInt(durationInput.value, 10) || 0;
+                const isActive = toggleInput.checked;
+
+                newAlerts.push({
+                    duration: duration,
+                    isActive: isActive,
+                });
+            });
+            
+            const enabled = document.getElementById('notification-master-toggle').checked;
+            const newSettings = { enabled: enabled, alerts: newAlerts };
+            saveSettings(newSettings);
+            
+            if (!enabled) {
+                localStorage.removeItem('firedNotifications');
+                firedNotifications = {};
+            }
+        }
+
+        function checkAndScheduleNotifications(data) {
+            const now = new Date();
+            const settings = loadSettings();
+            
+            if (!settings.enabled || Notification.permission !== 'granted') {
+                return;
+            }
+            
+            try {
+                const storedFired = JSON.parse(localStorage.getItem('firedNotifications') || '{}');
+                Object.assign(firedNotifications, storedFired); 
+            } catch (e) {
+                console.warn("Could not parse fired notifications from localStorage, starting clean.");
+                localStorage.setItem('firedNotifications', '{}');
+            }
+
+            data.forEach(cls => {
+                const classStartTime = getAbsoluteTime(cls, true);
+                
+                settings.alerts.forEach(alert => {
+                    if (!alert.isActive || alert.duration <= 0) return; 
+
+                    const alertMinutes = alert.duration;
+                    const fireTime = new Date(classStartTime.getTime() - alertMinutes * 60000); 
+                    const fireTimeMs = fireTime.getTime();
+                    const nowMs = now.getTime();
+                    const notificationId = `${cls.code}-${cls.day}-${cls.start}-${alertMinutes}min`;
+
+                    // [FIX] Widened the notification check window and corrected syntax.
+                    if (fireTimeMs <= nowMs && fireTimeMs > (nowMs - 60000) && !firedNotifications[notificationId]) {
+                        const title = `Reminder: ${alertMinutes} minutes until class!`;
+                        const body = `${cls.subject} (${cls.type}) starts at ${to12Hour(cls.start)} in room ${cls.room}. Get ready!`;
+                        
+                        new Notification(title, {
+                            body: body,
+                            icon: 'https://placehold.co/64x64/4f46e5/ffffff?text=C', 
+                            tag: notificationId 
+                        });
+                        
+                        firedNotifications[notificationId] = true;
+                        localStorage.setItem('firedNotifications', JSON.stringify(firedNotifications));
+                    }
+                });
+            });
+        }
+
+        // --- Status Widget ---
+        function updateStatusWidget(data){const now=new Date;let currentClass=null,nextClass=null;const todayClasses=data.filter(c=>c.day===daysOrder[now.getDay()]).sort((a,b)=>a.start.localeCompare(b.start));for(const cls of todayClasses){const startMinutes=parseInt(cls.start.split(":")[0])*60+parseInt(cls.start.split(":")[1]),endMinutes=parseInt(cls.end.split(":")[0])*60+parseInt(cls.end.split(":")[1]),nowMinutes=now.getHours()*60+now.getMinutes();if(nowMinutes>=startMinutes&&nowMinutes<endMinutes){currentClass=cls;const nextIndex=todayClasses.indexOf(cls)+1;if(nextIndex<todayClasses.length)nextClass=todayClasses[nextIndex];break}else if(nowMinutes<startMinutes&&!nextClass){nextClass=cls;break}}if(!currentClass&&!nextClass)for(let i=1;i<7;i++){const nextDayClasses=data.filter(c=>c.day===daysOrder[(now.getDay()+i)%7]).sort((a,b)=>a.start.localeCompare(b.start));if(nextDayClasses.length>0){nextClass=nextDayClasses[0];break}}const widget=document.getElementById("schedule-status-widget");let htmlContent="";if(currentClass){const timeRemainingMs=getAbsoluteTime(currentClass,!1).getTime()-now.getTime(),totalSeconds=Math.floor(timeRemainingMs/1e3),hours=Math.floor(totalSeconds/3600),minutes=Math.floor(totalSeconds%3600/60),seconds=totalSeconds%60,countdown=`${hours>0?hours+"h ":""}${minutes.toString().padStart(2,"0")}m ${seconds.toString().padStart(2,"0")}s`;htmlContent=`<div class="bg-red-50 border-l-4 border-red-500 rounded-xl p-4 md:p-6 shadow-md text-left"><p class="text-xs text-red-600 font-semibold mb-1 uppercase">Current Class</p><h3 class="text-xl font-bold text-gray-800">${currentClass.subject} (${currentClass.type})</h3><p class="text-sm text-gray-600 mt-1">Ends on ${dayNamesEn[currentClass.day]} at ${to12Hour(currentClass.end)} in room ${currentClass.room}</p><div class="mt-3 pt-2 border-t border-red-200"><p class="text-sm font-semibold text-gray-700">Time Remaining:</p><p class="status-countdown text-red-700">${countdown}</p></div></div>`}else if(nextClass){const timeRemainingMs=getAbsoluteTime(nextClass,!0).getTime()-now.getTime(),totalSeconds=Math.floor(timeRemainingMs/1e3),days=Math.floor(totalSeconds/86400),hours=Math.floor(totalSeconds%86400/3600),minutes=Math.floor(totalSeconds%3600/60),seconds=totalSeconds%60;let countdown=days>0?`${days}d ${hours}h ${minutes}m`:`${hours>0?hours+"h ":""}${minutes.toString().padStart(2,"0")}m ${seconds.toString().padStart(2,"0")}s`;htmlContent=`<div class="bg-green-50 border-l-4 border-green-500 rounded-xl p-4 md:p-6 shadow-md text-left"><p class="text-xs text-green-600 font-semibold mb-1 uppercase">Next Class</p><h3 class="text-xl font-bold text-gray-800">${nextClass.subject} (${nextClass.type})</h3><p class="text-sm text-gray-600 mt-1">Starts on ${dayNamesEn[nextClass.day]} at ${to12Hour(nextClass.start)} in room ${nextClass.room}</p><div class="mt-3 pt-2 border-t border-green-200"><p class="text-sm font-semibold text-gray-700">Time Until Start:</p><p class="status-countdown text-green-700">${countdown}</p></div></div>`}else{htmlContent=`<div class="bg-gray-100 border-l-4 border-gray-400 rounded-xl p-4 md:p-6 shadow-md text-center"><h3 class="text-xl font-bold text-gray-700">Schedule Status</h3><p class="text-sm text-gray-500 mt-2">No current or upcoming classes for this week.</p></div>`}widget.innerHTML=htmlContent}
+
+        /** Schedule View Renderer */
+        function renderScheduleView(data, container) {
+            const grouped = groupClassesByDay(data);
+            let html = '';
+            
+            daysOrder.forEach(day => {
+                const classes = grouped[day];
+                if (classes && classes.length > 0) {
+                    html += `<div class="mb-8">`;
+                    html += `<div class="flex items-center mb-4">
+                                <h3 class="text-2xl font-extrabold text-gray-800">${dayNamesEn[day]}</h3>
+                                <div class="w-full h-px bg-gray-200 ml-4"></div>
+                            </div>`;
+                    html += `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">`;
+                    classes.forEach(cls => {
+                        const time = `${to12Hour(cls.start)} - ${to12Hour(cls.end)}`;
+                        html += `
+                            <div class="class-card color-${cls.color} bg-white rounded-lg p-5 shadow-sm flex flex-col">
+                                <div class="flex justify-between items-start mb-2">
+                                    <div>
+                                        <p class="text-sm font-bold text-gray-800">${cls.code}</p>
+                                        <p class="text-xs text-gray-500">${cls.type}</p>
+                                    </div>
+                                    <span class="text-sm font-semibold" style="color: var(--class-color);">${time}</span>
+                                </div>
+                                <h4 class="text-lg font-bold text-gray-900 mb-3 flex-grow">${cls.subject}</h4>
+                                <div class="border-t border-gray-100 pt-3 space-y-2 text-sm">
+                                    <div class="flex items-center text-gray-600">
+                                        <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                                        <span>${cls.lecturer}</span>
+                                    </div>
+                                    <div class="flex items-center text-gray-600">
+                                        <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                                        <span>${cls.room}</span>
+                                    </div>
+                                </div>
+                            </div>`;
+                    });
+                    html += `</div></div>`;
+                }
+            });
+
+            if (html === '') {
+                html = `<div class="text-center text-gray-500 p-8 bg-white rounded-lg shadow-sm"><p>No classes are scheduled.</p></div>`;
+            }
+            container.innerHTML = html;
+        }
+
+        // --- App Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            const scheduleContainer = document.getElementById('schedule-container');
+            
+            function initNotificationUI() {
+                const settings = loadSettings();
+                document.getElementById('notification-master-toggle').checked = settings.enabled;
+                document.querySelectorAll('[data-alert-group]').forEach((group, index) => {
+                    const alert = settings.alerts[index] || { duration: 0, isActive: false };
+                    group.querySelector('[data-alert-input]').value = alert.duration;
+                    group.querySelector('[data-alert-toggle]').checked = alert.isActive;
+                });
+                const permission = Notification.permission;
+                document.getElementById('permission-status').textContent = permission === 'granted' ? "Permission Granted" : (permission === 'denied' ? "Permission Denied" : "Default Permission");
+                document.querySelectorAll('.notification-setting-input').forEach(el => el.addEventListener('change', updateSettingsFromUI));
+                document.getElementById('request-permission-btn').addEventListener('click', requestNotificationPermission);
+            }
+
+            renderScheduleView(scheduleData, scheduleContainer);
+            initNotificationUI();
+            updateStatusWidget(scheduleData);
+            checkAndScheduleNotifications(scheduleData);
+            
+            setInterval(() => {
+                updateStatusWidget(scheduleData);
+                checkAndScheduleNotifications(scheduleData);
+            }, 1000); 
+        });
+    </script>
+
+    <div class="max-w-7xl mx-auto">
+        <header class="mb-8 text-center">
+            <h1 class="text-4xl md:text-5xl font-extrabold text-gray-900 mb-2">My Academic Schedule</h1>
+            <p class="text-lg text-gray-600">A comprehensive and organized view of your weekly lectures.</p>
+        </header>
+        
+        <div id="schedule-status-widget" class="mb-10 max-w-2xl mx-auto" style="direction: ltr;">
+            <div class="bg-white border-l-4 border-gray-300 rounded-xl p-6 shadow-md text-center">Loading schedule status...</div>
+        </div>
+
+        <div id="schedule-container">
+            <!-- Rendered by JavaScript -->
+        </div>
+        
+        <!-- --- Notification Settings --- -->
+        <div class="bg-white rounded-xl shadow-lg p-6 md:p-8 mt-12">
+            <h2 class="text-2xl font-bold text-indigo-700 mb-4 border-b pb-3">Notification Settings</h2>
+            <div class="flex flex-col md:flex-row justify-between items-center bg-indigo-50 p-4 rounded-lg border border-indigo-200 mb-6">
+                <div class="mb-3 md:mb-0 text-center md:text-left">
+                    <button id="request-permission-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-full transition duration-200 shadow-md">
+                        Request Notification Permission
+                    </button>
+                    <p id="permission-status" class="text-xs text-gray-700 mt-2 font-medium">Default Permission</p>
+                </div>
+                <div class="flex items-center space-x-3 toggle-switch-group">
+                    <span class="text-lg font-semibold text-gray-700">Enable All Notifications</span>
+                    <label for="notification-master-toggle" class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="notification-master-toggle" class="sr-only peer notification-setting-input">
+                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600 peer-checked:after:translate-x-full"></div>
+                    </label>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Alert 1 -->
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-4" data-alert-group="0">
+                    <div class="flex justify-between items-center mb-2">
+                        <label for="alert-toggle-1" class="text-sm font-bold text-gray-800">Alert 1</label>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="alert-toggle-1" data-alert-toggle="0" class="sr-only peer notification-setting-input">
+                            <div class="w-9 h-5 bg-gray-300 rounded-full peer peer-focus:ring-2 peer-focus:ring-indigo-500 after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600 peer-checked:after:translate-x-full"></div>
+                        </label>
+                    </div>
+                    <label for="alert-duration-1" class="block text-sm font-medium text-gray-700 mb-1">Time (in minutes)</label>
+                    <input type="number" id="alert-duration-1" data-alert-input="0" class="notification-setting-input mt-1 block w-full px-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md shadow-sm">
+                </div>
+                <!-- Alert 2 -->
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-4" data-alert-group="1">
+                    <div class="flex justify-between items-center mb-2">
+                        <label for="alert-toggle-2" class="text-sm font-bold text-gray-800">Alert 2</label>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="alert-toggle-2" data-alert-toggle="1" class="sr-only peer notification-setting-input">
+                            <div class="w-9 h-5 bg-gray-300 rounded-full peer peer-focus:ring-2 peer-focus:ring-indigo-500 after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600 peer-checked:after:translate-x-full"></div>
+                        </label>
+                    </div>
+                    <label for="alert-duration-2" class="block text-sm font-medium text-gray-700 mb-1">Time (in minutes)</label>
+                    <input type="number" id="alert-duration-2" data-alert-input="1" class="notification-setting-input mt-1 block w-full px-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md shadow-sm">
+                </div>
+                <!-- Alert 3 -->
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-4" data-alert-group="2">
+                    <div class="flex justify-between items-center mb-2">
+                        <label for="alert-toggle-3" class="text-sm font-bold text-gray-800">Alert 3</label>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="alert-toggle-3" data-alert-toggle="2" class="sr-only peer notification-setting-input">
+                            <div class="w-9 h-5 bg-gray-300 rounded-full peer peer-focus:ring-2 peer-focus:ring-indigo-500 after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600 peer-checked:after:translate-x-full"></div>
+                        </label>
+                    </div>
+                    <label for="alert-duration-3" class="block text-sm font-medium text-gray-700 mb-1">Time (in minutes)</label>
+                    <input type="number" id="alert-duration-3" data-alert-input="2" class="notification-setting-input mt-1 block w-full px-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md shadow-sm">
+                </div>
+            </div>
+            <p class="text-xs text-gray-500 mt-4">Note: To receive alerts, you must first click "Request Notification Permission" and allow it in your browser.</p>
+        </div>
+    </div>
+</body>
+</html>
+
