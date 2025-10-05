@@ -222,3 +222,105 @@
 </body>
 </html>
 
+
+// ... existing code ...
+         function loadNotificationSettings() {
+             try {
+                 const settings = JSON.parse(localStorage.getItem('notificationSettings')) || {
+                     alerts: [
+                         { minutes: 15, enabled: true },
+                         { minutes: 30, enabled: false },
+                         { minutes: 60, enabled: false }
+                     ]
+                 };
+                 
+                 // تطبيق الإعدادات المحفوظة على واجهة المستخدم
+                 settings.alerts.forEach((alert, index) => {
+                     const group = document.querySelectorAll('[data-alert-group]')[index];
+                     if (group) {
+                         group.querySelector('input[type="number"]').value = alert.minutes;
+                         group.querySelector('input[type="checkbox"]').checked = alert.enabled;
+                     }
+                 });
+                 
+                 return settings;
+             } catch (error) {
+                 console.error('Error loading settings:', error);
+                 return null;
+             }
+         }
+
+         function saveNotificationSettings(settings) {
+             try {
+                 localStorage.setItem('notificationSettings', JSON.stringify(settings));
+             } catch (error) {
+                 console.error('Error saving settings:', error);
+             }
+         }
+
+         async function requestAndSavePermission() {
+             try {
+                 const permission = await Notification.requestPermission();
+                 if (permission === 'granted') {
+                     const vapidKey = "BDYWhY5UZEUZGA4PzhFEUO_fmIFEP4BnoeDBv0EVAvFh719Wb522tcvbz3RtTTeqjha_l-oQYJF43J-zvUGTZNE";
+                     const currentToken = await getToken(messaging, { vapidKey: vapidKey });
+                     if (currentToken) {
+                         fcmToken = currentToken;
+                         const alerts = getAlertsFromUI();
+                         
+                         // حفظ الإعدادات محلياً
+                         saveNotificationSettings({ alerts });
+                         
+                         await setDoc(doc(db, "fcmTokens", fcmToken), { 
+                             token: fcmToken, 
+                             alerts: alerts,
+                             createdAt: new Date() 
+                         });
+                         
+                         showMessage('تم تفعيل الإشعارات! يمكنك الآن تخصيص التنبيهات.', 'success');
+                         document.getElementById('settings-panel').classList.remove('hidden');
+                     } else showMessage('لم نتمكن من الحصول على رمز التسجيل.', 'error');
+                 } else showMessage('لم يتم السماح بالإشعارات.', 'error');
+             } catch (err) {
+                 console.error('حدث خطأ:', err);
+             }
+         }
+
+         async function saveReminderSettings() {
+             if (!fcmToken) {
+                 try {
+                     await requestAndSavePermission();
+                     if (!fcmToken) return;
+                 } catch(e) {
+                     showMessage('الرجاء تفعيل الإشعارات أولاً.', 'error');
+                     return;
+                 }
+             }
+             
+             const alerts = getAlertsFromUI();
+             try {
+                 // حفظ الإعدادات محلياً
+                 saveNotificationSettings({ alerts });
+                 
+                 await setDoc(doc(db, "fcmTokens", fcmToken), {
+                     token: fcmToken,
+                     alerts: alerts
+                 }, { merge: true });
+                 
+                 showMessage('تم حفظ إعدادات التنبيهات بنجاح.', 'success');
+             } catch (error) {
+                 console.error("خطأ في حفظ الإعدادات:", error);
+                 showMessage('لم نتمكن من حفظ الإعدادات.', 'error');
+             }
+         }
+
+         document.addEventListener('DOMContentLoaded', () => {
+             // تحميل الإعدادات المحفوظة
+             loadNotificationSettings();
+             
+             const scheduleContainer = document.getElementById('schedule-container');
+             renderScheduleView(scheduleData, scheduleContainer);
+             updateStatusWidget(scheduleData);
+             setInterval(() => updateStatusWidget(scheduleData), 1000);
+         });
+
