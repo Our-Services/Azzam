@@ -1,8 +1,0 @@
-[build]
-  publish = "/" 
-  functions = "netlify/functions"
-
-# Correct syntax for a scheduled function
-[functions."send-notifications"]
-  schedule = "*/5 * * * *"
-
