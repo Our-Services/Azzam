@@ -140,6 +140,24 @@
                 console.error("Error saving notification settings:", e);
             }
         }
+        
+        function updatePermissionStatusUI() {
+            const permission = Notification.permission;
+            const statusEl = document.getElementById('permission-status');
+            const settings = loadSettings();
+
+            let statusText = "Default Permission";
+            if (permission === 'granted') statusText = "Permission Granted";
+            if (permission === 'denied') statusText = "Permission Denied";
+            statusEl.textContent = statusText;
+
+            const warningEl = document.getElementById('permission-warning');
+            if (settings.enabled && permission !== 'granted') {
+                warningEl.classList.remove('hidden');
+            } else {
+                warningEl.classList.add('hidden');
+            }
+        }
 
         function requestNotificationPermission() {
             if (!("Notification" in window)) {
@@ -149,8 +167,7 @@
 
             if (Notification.permission !== 'granted') {
                 Notification.requestPermission().then(permission => {
-                    document.getElementById('permission-status').textContent = 
-                        permission === 'granted' ? "Permission Granted" : "Permission Denied";
+                    updatePermissionStatusUI(); 
                     if (permission !== 'granted') {
                         document.getElementById('notification-master-toggle').checked = false;
                         updateSettingsFromUI(); 
@@ -159,7 +176,7 @@
                     console.error("Error requesting notification permission:", e);
                 });
             } else {
-                document.getElementById('permission-status').textContent = "Permission Granted";
+                updatePermissionStatusUI();
             }
         }
 
@@ -170,20 +187,21 @@
             inputGroups.forEach((group, index) => {
                 const durationInput = group.querySelector('[data-alert-input]');
                 const toggleInput = group.querySelector('[data-alert-toggle]');
-                
                 const duration = parseInt(durationInput.value, 10) || 0;
                 const isActive = toggleInput.checked;
-
-                newAlerts.push({
-                    duration: duration,
-                    isActive: isActive,
-                });
+                newAlerts.push({ duration: duration, isActive: isActive });
             });
             
             const enabled = document.getElementById('notification-master-toggle').checked;
             const newSettings = { enabled: enabled, alerts: newAlerts };
             saveSettings(newSettings);
             
+            if (enabled && Notification.permission === 'default') {
+                requestNotificationPermission();
+            }
+            
+            updatePermissionStatusUI();
+
             if (!enabled) {
                 localStorage.removeItem('firedNotifications');
                 firedNotifications = {};
@@ -217,8 +235,7 @@
                     const fireTimeMs = fireTime.getTime();
                     const nowMs = now.getTime();
                     const notificationId = `${cls.code}-${cls.day}-${cls.start}-${alertMinutes}min`;
-
-                    // [FIX] Widened the notification check window and corrected syntax.
+                    
                     if (fireTimeMs <= nowMs && fireTimeMs > (nowMs - 60000) && !firedNotifications[notificationId]) {
                         const title = `Reminder: ${alertMinutes} minutes until class!`;
                         const body = `${cls.subject} (${cls.type}) starts at ${to12Hour(cls.start)} in room ${cls.room}. Get ready!`;
@@ -299,8 +316,9 @@
                     group.querySelector('[data-alert-input]').value = alert.duration;
                     group.querySelector('[data-alert-toggle]').checked = alert.isActive;
                 });
-                const permission = Notification.permission;
-                document.getElementById('permission-status').textContent = permission === 'granted' ? "Permission Granted" : (permission === 'denied' ? "Permission Denied" : "Default Permission");
+                
+                updatePermissionStatusUI();
+                
                 document.querySelectorAll('.notification-setting-input').forEach(el => el.addEventListener('change', updateSettingsFromUI));
                 document.getElementById('request-permission-btn').addEventListener('click', requestNotificationPermission);
             }
@@ -313,7 +331,7 @@
             setInterval(() => {
                 updateStatusWidget(scheduleData);
                 checkAndScheduleNotifications(scheduleData);
-            }, 1000); 
+            }, 5000); // Check every 5 seconds is enough
         });
     </script>
 
@@ -334,6 +352,13 @@
         <!-- --- Notification Settings --- -->
         <div class="bg-white rounded-xl shadow-lg p-6 md:p-8 mt-12">
             <h2 class="text-2xl font-bold text-indigo-700 mb-4 border-b pb-3">Notification Settings</h2>
+            
+            <!-- NEW: Permission Warning -->
+            <div id="permission-warning" class="hidden bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-4 mb-4 rounded-md" role="alert">
+              <p class="font-bold">Action Required</p>
+              <p>Notifications are on, but your browser requires permission. Please click the "Request... Permission" button and choose "Allow".</p>
+            </div>
+
             <div class="flex flex-col md:flex-row justify-between items-center bg-indigo-50 p-4 rounded-lg border border-indigo-200 mb-6">
                 <div class="mb-3 md:mb-0 text-center md:text-left">
                     <button id="request-permission-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-full transition duration-200 shadow-md">
