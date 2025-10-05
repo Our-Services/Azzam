@@ -1,6 +1,6 @@
 importScripts(
-    'https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js',
-    'https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js'
+    'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js',
+    'https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js'
 );
 
 firebase.initializeApp({
@@ -15,12 +15,17 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
+    console.log('Received background message:', payload);
+    
     const notificationTitle = payload.notification.title;
     const notificationOptions = {
         body: payload.notification.body,
-        icon: '/icon.png'
+        icon: '/notification-icon.png',
+        badge: '/notification-badge.png',
+        tag: 'class-notification',
+        data: payload.data
     };
 
-    self.registration.showNotification(notificationTitle, notificationOptions);
+    return self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
