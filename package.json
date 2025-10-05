@@ -1,8 +1,0 @@
-{
-  "name": "schedule-notifications",
-  "version": "1.0.0",
-  "description": "Serverless function to send schedule notifications.",
-  "dependencies": {
-    "firebase-admin": "^12.0.0"
-  }
-}
